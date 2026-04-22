@@ -1,0 +1,2341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A/B Statistical Test Calculator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #F1F5F9;
+    color: #1E293B;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #062430;
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    margin-top: 6px;
+    color: #64748B;
+    font-size: 1.05rem;
+  }
+
+  /* Container */
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+  }
+
+  /* Section titles */
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #94A3B8;
+    margin-bottom: 10px;
+  }
+
+  /* Scenario cards */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 400px) { .cards-grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    user-select: none;
+  }
+  .card:hover {
+    border-color: #6BA2B8;
+    box-shadow: 0 2px 8px rgba(28,117,153,0.1);
+    transform: translateY(-1px);
+  }
+  .card.active {
+    border-color: #1C7599;
+    background: #EBF4FA;
+    box-shadow: 0 0 0 3px rgba(28,117,153,0.15);
+  }
+  .card-icon { font-size: 1.5rem; margin-bottom: 6px; }
+  .card-title { font-weight: 700; font-size: 0.95rem; color: #062430; }
+  .card-sub { font-size: 0.8rem; color: #64748B; margin-top: 2px; }
+
+  /* Panel */
+  .panel {
+    background: white;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+
+  /* Form groups */
+  .form-row {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  @media (max-width: 560px) {
+    .form-row.cols-2, .form-row.cols-3, .form-row.cols-4 { grid-template-columns: 1fr 1fr; }
+  }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.78rem; font-weight: 600; color: #475569; }
+  .field input {
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    color: #1E293B;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background: #FAFAFA;
+    width: 100%;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: #1C7599;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(28,117,153,0.12);
+  }
+  .field input.error { border-color: #EF4444; background: #FEF2F2; }
+
+  .group-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1C7599;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #D6EBF4;
+  }
+  .group-label.treatment { color: #6BA2B8; border-color: rgba(107,162,184,0.3); }
+
+  /* ANOVA variant rows */
+  .variant-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+  }
+  @media (max-width: 560px) {
+    .variant-row { grid-template-columns: 1fr 1fr; }
+    .variant-row .field:first-child { grid-column: 1 / -1; }
+  }
+
+  .btn-remove {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border: none;
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    align-self: flex-end;
+  }
+  .btn-remove:hover { background: #FECACA; }
+
+  .btn-add {
+    background: #EBF4FA;
+    color: #1C7599;
+    border: 1.5px dashed #6BA2B8;
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+    margin-top: 4px;
+  }
+  .btn-add:hover { background: #D6EBF4; border-color: #1C7599; }
+
+  /* Alpha input */
+  .alpha-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .alpha-row label { font-size: 0.85rem; font-weight: 600; color: #475569; }
+  .alpha-row input {
+    width: 80px;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.9rem;
+    color: #1E293B;
+    background: #FAFAFA;
+    transition: border-color 0.15s;
+  }
+  .alpha-row input:focus { outline: none; border-color: #1C7599; background: white; }
+  .alpha-hint { font-size: 0.78rem; color: #94A3B8; }
+
+  /* Run button */
+  .btn-run {
+    width: 100%;
+    background: #FCB426;
+    color: #062430;
+    border: none;
+    border-radius: 10px;
+    padding: 13px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 2px 8px rgba(252,180,38,0.35);
+  }
+  .btn-run:hover { background: #e8a020; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(252,180,38,0.4); }
+  .btn-run:active { transform: translateY(0); }
+
+  /* Error message */
+  .error-msg {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+
+  /* Step header */
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #94A3B8;
+  }
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1C7599;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  /* Sample size slider */
+  .ss-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 10px 0 4px;
+  }
+  .ss-slider-wrap input[type="range"] {
+    flex: 1;
+    accent-color: #1C7599;
+    cursor: pointer;
+    height: 6px;
+  }
+  .ss-bound { font-size: 0.75rem; color: #94A3B8; min-width: 58px; text-align: center; }
+  .ss-n-value { font-size: 1.4rem; font-weight: 700; color: #1C7599; margin: 6px 0 2px; }
+  .ss-footer { font-size: 0.8rem; color: #64748B; margin-top: 6px; }
+
+  /* Effect size button */
+  .btn-effect {
+    background: #1C7599;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 22px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 2px 8px rgba(28,117,153,0.3);
+    margin-top: 16px;
+  }
+  .btn-effect:hover { background: #155f7a; transform: translateY(-1px); }
+  .btn-effect:active { transform: translateY(0); }
+  .btn-ss {
+    background: #062430;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 22px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 2px 8px rgba(6,36,48,0.3);
+    margin-top: 16px;
+    display: none;
+  }
+  .btn-ss:hover { background: #0A3B50; transform: translateY(-1px); }
+  .btn-ss:active { transform: translateY(0); }
+
+  /* Stat boxes */
+  .stat-boxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-box {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-box-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94A3B8; margin-bottom: 4px; }
+  .stat-box-value { font-size: 1.15rem; font-weight: 700; color: #062430; }
+  .stat-box-sub { font-size: 0.72rem; color: #94A3B8; margin-top: 2px; }
+
+  /* Chart */
+  .chart-wrapper {
+    position: relative;
+    height: 280px;
+    margin-bottom: 20px;
+  }
+
+  /* Interpretation */
+  .interpretation {
+    background: #EBF4FA;
+    border-left: 4px solid #1C7599;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: #062430;
+  }
+
+  /* Divider */
+  hr { border: none; border-top: 1px solid #E2E8F0; margin: 16px 0; }
+
+  /* Textarea for Mann-Whitney */
+  .field textarea {
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.88rem;
+    color: #1E293B;
+    background: #FAFAFA;
+    resize: vertical;
+    min-height: 70px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  .field textarea:focus {
+    outline: none;
+    border-color: #1C7599;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(28,117,153,0.12);
+  }
+  .field textarea.error { border-color: #EF4444; background: #FEF2F2; }
+
+  /* T-test raw data preview */
+  .ttest-preview {
+    font-size: 0.79rem;
+    color: #475569;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 7px 10px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  .ttest-preview strong { color: #062430; }
+  .ttest-preview.has-data { border-color: #6BA2B8; background: #EBF4FA; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>A/B Statistical Test Calculator</h1>
+    <p>Select a test, enter your data, and evaluate results using confidence intervals.</p>
+  </div>
+
+  <!-- Step 1: Scenario Selector -->
+  <div class="step-header">
+    <span class="step-badge">1</span> Select Test Type
+  </div>
+  <div class="cards-grid">
+    <div class="card" data-scenario="ztest" onclick="selectScenario('ztest')">
+      <div class="card-icon">&#9878;</div>
+      <div class="card-title">Two Proportions Test</div>
+      <div class="card-sub">Fisher's Exact Test</div>
+    </div>
+    <div class="card" data-scenario="ttest" onclick="selectScenario('ttest')">
+      <div class="card-icon">&#8779;</div>
+      <div class="card-title">Two Means Test</div>
+      <div class="card-sub">Welch's T-test</div>
+    </div>
+    <div class="card" data-scenario="anova" onclick="selectScenario('anova')">
+      <div class="card-icon">&#9638;</div>
+      <div class="card-title">Multiple Means</div>
+      <div class="card-sub">One-Way ANOVA</div>
+    </div>
+    <div class="card" data-scenario="chisq" onclick="selectScenario('chisq')">
+      <div class="card-icon">&#967;</div>
+      <div class="card-title">Multiple Proportions</div>
+      <div class="card-sub">Chi-Squared Homogeneity</div>
+    </div>
+  </div>
+
+  <!-- Step 2: Data Input (hidden until test selected) -->
+  <div id="step-2" style="display:none">
+    <div class="step-header" style="margin-top:8px;">
+      <span class="step-badge">2</span> Enter Data
+    </div>
+    <div class="panel" id="input-panel">
+      <div class="section-title" id="input-title"></div>
+      <div id="input-form"></div>
+    </div>
+    <button class="btn-run" onclick="plotData()">Plot Data ›</button>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- Step 3: Data Visualization (hidden until plot) -->
+  <div id="step-hist" style="display:none">
+    <div class="step-header" style="margin-top:8px;">
+      <span class="step-badge">3</span> Inspect Data
+    </div>
+    <div class="panel">
+      <div class="chart-wrapper"><canvas id="hist-chart"></canvas></div>
+      <div style="margin-top:16px;">
+        <div class="section-title">Confidence Level</div>
+        <div class="alpha-row">
+          <label for="alpha-input">Confidence Level</label>
+          <input type="number" id="alpha-input" value="0.95" min="0.5" max="0.999" step="0.01">
+          <span class="alpha-hint">e.g. 0.90, 0.95, 0.99</span>
+        </div>
+      </div>
+      <button class="btn-run" onclick="runTest()" style="margin-top:12px;">Run Analysis ›</button>
+    </div>
+  </div>
+
+  <!-- Step 4: CI Results (hidden until calculated) -->
+  <div id="step-3" style="display:none">
+    <div class="step-header" style="margin-top:8px;">
+      <span class="step-badge">4</span> Confidence Intervals
+    </div>
+    <div class="panel">
+      <div class="stat-boxes" id="stat-boxes"></div>
+      <div class="chart-wrapper"><canvas id="result-chart"></canvas></div>
+      <div class="chart-wrapper" id="diff-chart-wrapper" style="display:none; height:110px; margin-top:0">
+        <canvas id="diff-chart"></canvas>
+      </div>
+      <div id="interpretation-text"></div>
+      <button class="btn-effect" onclick="showEffectSize()">Show Effect Size ›</button>
+    </div>
+  </div>
+
+  <!-- Step 5: Effect Size (hidden until button clicked) -->
+  <div id="step-4" style="display:none">
+    <div class="step-header" style="margin-top:8px;">
+      <span class="step-badge">5</span> Effect Size
+    </div>
+    <div class="panel">
+      <div class="stat-boxes" id="effect-boxes"></div>
+      <div id="effect-text"></div>
+      <button class="btn-ss" id="btn-show-ss" onclick="showSampleSizeStep()">Show Sample Size &amp; Precision ›</button>
+    </div>
+  </div>
+
+  <!-- Step 6: Sample Size & Precision (2-group tests only) -->
+  <div id="step-5" style="display:none">
+    <div class="step-header" style="margin-top:8px;">
+      <span class="step-badge">6</span> Sample Size &amp; Precision
+    </div>
+    <div class="panel">
+      <p id="ss-intro" style="font-size:0.85rem; color:#475569; line-height:1.6; margin-bottom:16px;"></p>
+      <div>
+        <label style="font-size:0.82rem; font-weight:600; color:#475569;">Hypothetical sample size per group</label>
+        <div class="ss-n-value" id="ss-n-display">—</div>
+        <div class="ss-slider-wrap">
+          <span class="ss-bound" id="ss-min-label"></span>
+          <input type="range" id="ss-slider" min="0" max="100" value="50" oninput="updateSSChart()">
+          <span class="ss-bound" id="ss-max-label"></span>
+        </div>
+        <div class="ss-footer" id="ss-footer"></div>
+      </div>
+      <div style="margin-top:16px;">
+        <label style="font-size:0.82rem; font-weight:600; color:#475569;">Hypothetical effect size</label>
+        <div class="ss-n-value" id="ss-effect-display">—</div>
+        <div class="ss-slider-wrap">
+          <span class="ss-bound" id="ss-effect-min-label"></span>
+          <input type="range" id="ss-effect-slider" min="0" max="100" value="50" oninput="updateSSChart()">
+          <span class="ss-bound" id="ss-effect-max-label"></span>
+        </div>
+        <div class="ss-footer" id="ss-effect-footer"></div>
+      </div>
+      <div class="stat-boxes" id="ss-stat-boxes" style="margin-top:16px;"></div>
+      <div class="chart-wrapper" style="height:110px; margin-top:8px;">
+        <canvas id="ss-diff-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  MATH UTILITIES
+// ─────────────────────────────────────────────
+
+function normalCDF(x) {
+  // Abramowitz & Stegun approximation 26.2.17
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989422820 * Math.exp(-0.5 * x * x);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.8212560 + t * 1.3302744))));
+  return x >= 0 ? 1 - p : p;
+}
+
+function normalPDF(x, mu, sigma) {
+  const z = (x - mu) / sigma;
+  return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI));
+}
+
+function gammaLn(x) {
+  // Lanczos approximation
+  const c = [76.18009172947146,-86.50532032941677,24.01409824083091,
+             -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y = x, tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (let j = 0; j < 6; j++) ser += c[j] / ++y;
+  return -tmp + Math.log(2.5066282746310005 * ser / x);
+}
+
+function betaCF(a, b, x) {
+  // Lentz continued fraction method
+  const MAXIT = 200, EPS = 3e-7, FPMIN = 1e-30;
+  const qab = a + b, qap = a + 1, qam = a - 1;
+  let c = 1, d = 1 - qab * x / qap;
+  if (Math.abs(d) < FPMIN) d = FPMIN;
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= MAXIT; m++) {
+    const m2 = 2 * m;
+    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d; h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < EPS) break;
+  }
+  return h;
+}
+
+function betaInc(a, b, x) {
+  if (x < 0 || x > 1) return NaN;
+  if (x === 0) return 0;
+  if (x === 1) return 1;
+  const lbeta = gammaLn(a) + gammaLn(b) - gammaLn(a + b);
+  const front = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lbeta) / a;
+  if (x < (a + 1) / (a + b + 2)) return front * betaCF(a, b, x);
+  return 1 - Math.exp(Math.log(1-x)*b + Math.log(x)*a - lbeta) / b * betaCF(b, a, 1-x);
+}
+
+function tDistPValue(t, df) {
+  // Two-tailed p-value
+  const x = df / (df + t * t);
+  return betaInc(df / 2, 0.5, x);
+}
+
+function fDistPValue(f, df1, df2) {
+  // Upper-tail p-value for F distribution
+  if (f <= 0) return 1;
+  const x = df2 / (df2 + df1 * f);
+  return betaInc(df2 / 2, df1 / 2, x);
+}
+
+function tCritical(df, alpha) {
+  // Binary search for t* such that tDistPValue(t*, df) = alpha (two-tailed)
+  let lo = 0, hi = 50;
+  for (let i = 0; i < 64; i++) {
+    const mid = (lo + hi) / 2;
+    if (tDistPValue(mid, df) > alpha) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function gammaIncLower(a, x) {
+  // Regularized lower incomplete gamma P(a, x) via series expansion
+  if (x <= 0) return 0;
+  let term = 1 / a, sum = term;
+  for (let n = 1; n < 300; n++) {
+    term *= x / (a + n);
+    sum += term;
+    if (Math.abs(term) < 1e-12 * sum) break;
+  }
+  return Math.min(1, Math.exp(-x + a * Math.log(x) - gammaLn(a)) * sum);
+}
+
+function gammaIncUpper(a, x) {
+  // Regularized upper incomplete gamma Q(a, x) = 1 - P(a, x)
+  // Uses series for small x, continued fraction for large x
+  if (x <= 0) return 1;
+  if (x < a + 1) return 1 - gammaIncLower(a, x);
+  // Lentz continued fraction
+  const FPMIN = 1e-300;
+  let b = x + 1 - a, c = 1 / FPMIN, d = 1 / b, h = d;
+  for (let i = 1; i <= 200; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b; if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = b + an / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-9) break;
+  }
+  return Math.exp(-x + a * Math.log(x) - gammaLn(a)) * h;
+}
+
+function chiSqPValue(chi2, df) {
+  // Upper-tail p-value for chi-squared distribution
+  if (chi2 <= 0) return 1;
+  return gammaIncUpper(df / 2, chi2 / 2);
+}
+
+function normalQuantile(p) {
+  // Inverse normal CDF via bisection on normalCDF
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  let lo = -10, hi = 10;
+  for (let i = 0; i < 64; i++) {
+    const mid = (lo + hi) / 2;
+    if (normalCDF(mid) < p) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+function wilsonCI(c, n, alpha) {
+  // Wilson score confidence interval — guaranteed to stay within [0, 1]
+  const p = c / n;
+  const z = normalQuantile(1 - alpha / 2);
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const center = (p + z2 / (2 * n)) / denom;
+  const margin = (z / denom) * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n));
+  return [Math.max(0, center - margin), Math.min(1, center + margin)];
+}
+
+function logisticCI(c, n, z) {
+  // Logistic regression Wald CI: Wald interval on log-odds scale, back-transformed via sigmoid.
+  // Haldane-Anscombe correction (+0.5/+1) for boundary cells (c=0 or c=n).
+  let cA = c, nA = n;
+  if (c === 0 || c === n) { cA = c + 0.5; nA = n + 1; }
+  const p = cA / nA;
+  const logOdds = Math.log(p / (1 - p));
+  const se = 1 / Math.sqrt(nA * p * (1 - p));
+  return [Math.max(0, sigmoid(logOdds - z * se)), Math.min(1, sigmoid(logOdds + z * se))];
+}
+
+function combineCI(p1, ci1, p2, ci2) {
+  // Derive the CI for (p2 - p1) directly from the two individual CIs by subtracting bounds.
+  // [L2 - U1, U2 - L1] — guarantees: diff CI excludes 0 iff individual CIs do not overlap.
+  const [L1, U1] = ci1;
+  const [L2, U2] = ci2;
+  return [L2 - U1, U2 - L1];
+}
+
+function logComb(n, k) {
+  // log C(n, k) via log-gamma; returns -Infinity for impossible combinations
+  if (k < 0 || k > n) return -Infinity;
+  if (k === 0 || k === n) return 0;
+  return gammaLn(n + 1) - gammaLn(k + 1) - gammaLn(n - k + 1);
+}
+
+function fisherExactPValue(c1, n1, c2, n2) {
+  // Two-tailed Fisher's exact test via hypergeometric distribution
+  const N = n1 + n2;
+  const K = c1 + c2;                          // total successes
+  const kMin = Math.max(0, n1 + K - N);
+  const kMax = Math.min(n1, K);
+  const logDenom = logComb(N, n1);
+  const logPObs  = logComb(K, c1) + logComb(N - K, n1 - c1) - logDenom;
+  let pVal = 0;
+  for (let k = kMin; k <= kMax; k++) {
+    const logP = logComb(K, k) + logComb(N - K, n1 - k) - logDenom;
+    if (logP <= logPObs + 1e-10) pVal += Math.exp(logP);
+  }
+  return Math.min(1, pVal);
+}
+
+
+// ─────────────────────────────────────────────
+//  UI STATE
+// ─────────────────────────────────────────────
+
+let currentScenario = null;
+let chartInstance = null;
+let diffChartInstance = null;
+let histChartInstance = null;
+let currentResult = null;
+let currentAlpha = 0.05;
+
+
+function destroyDiffChart() {
+  if (diffChartInstance) { diffChartInstance.destroy(); diffChartInstance = null; }
+  document.getElementById('diff-chart-wrapper').style.display = 'none';
+}
+
+function drawDiffCIChart(diff, lo, hi, alpha, xLabel, formatFn) {
+  destroyDiffChart();
+  const wrapper = document.getElementById('diff-chart-wrapper');
+  wrapper.style.display = 'block';
+  const ctx = document.getElementById('diff-chart').getContext('2d');
+  const ciPct = Math.round((1 - alpha) * 100);
+
+  const span = Math.abs(hi - lo);
+  const pad = Math.max(span * 0.4, Math.abs(diff) * 0.25, 0.001);
+  const xMin = Math.min(lo, 0) - pad;
+  const xMax = Math.max(hi, 0) + pad;
+  const includesZero = lo <= 0 && hi >= 0;
+
+  const diffCIPlugin = {
+    id: 'diffCIPlot',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x } } = chart;
+      const ca = chart.chartArea;
+      const midY = (ca.top + ca.bottom) / 2;
+      const pxLo   = x.getPixelForValue(lo);
+      const pxHi   = x.getPixelForValue(hi);
+      const pxDiff = x.getPixelForValue(diff);
+      const pxZero = x.getPixelForValue(0);
+
+      ctx.save();
+
+      // Shaded CI region
+      ctx.fillStyle = includesZero ? 'rgba(148,163,184,0.15)' : 'rgba(28,117,153,0.12)';
+      ctx.fillRect(pxLo, midY - 12, pxHi - pxLo, 24);
+
+      // CI line
+      ctx.strokeStyle = includesZero ? '#94A3B8' : '#1C7599';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pxLo, midY); ctx.lineTo(pxHi, midY); ctx.stroke();
+
+      // End caps
+      [pxLo, pxHi].forEach(px => {
+        ctx.beginPath(); ctx.moveTo(px, midY - 9); ctx.lineTo(px, midY + 9); ctx.stroke();
+      });
+
+      // Point estimate
+      ctx.fillStyle = includesZero ? '#94A3B8' : '#1C7599';
+      ctx.beginPath(); ctx.arc(pxDiff, midY, 6, 0, 2 * Math.PI); ctx.fill();
+
+      // Zero reference line
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(pxZero, ca.top); ctx.lineTo(pxZero, ca.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.restore();
+    }
+  };
+
+  diffChartInstance = new Chart(ctx, {
+    type: 'scatter',
+    plugins: [diffCIPlugin],
+    data: { datasets: [{ data: [] }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          type: 'linear', min: xMin, max: xMax,
+          title: { display: true, text: `${ciPct}% CI of ${xLabel}  |  red line = 0 (no difference)` },
+          ticks: { maxTicksLimit: 7, callback: v => formatFn(v) }
+        },
+        y: { display: false }
+      }
+    }
+  });
+}
+
+function newcombeCI(c1, n1, c2, n2, alpha) {
+  // Newcombe (1998) hybrid score method for CI of risk difference
+  const p1 = c1 / n1, p2 = c2 / n2;
+  const [l1, u1] = wilsonCI(c1, n1, alpha);
+  const [l2, u2] = wilsonCI(c2, n2, alpha);
+  const diff = p2 - p1;
+  const lo = diff - Math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2);
+  const hi = diff + Math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2);
+  return [lo, hi];
+}
+
+function fmtPp(n, dec = 2) {
+  const sign = n >= 0 ? '+' : '';
+  return sign + (n * 100).toFixed(dec) + ' pp';
+}
+
+function revealStep(id) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(10px)';
+  el.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+  el.offsetHeight; // force reflow
+  el.style.opacity = '1';
+  el.style.transform = 'translateY(0)';
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+}
+
+function hideStep(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+function selectScenario(s) {
+  currentScenario = s;
+  document.querySelectorAll('.card').forEach(c => c.classList.toggle('active', c.dataset.scenario === s));
+  const step2 = document.getElementById('step-2');
+  const wasHidden = step2.style.display === 'none';
+  renderForm();
+  hideStep('step-hist');
+  destroyHistChart();
+  hideStep('step-3');
+  hideStep('step-4');
+  hideStep('step-5');
+  clearError();
+  currentResult = null;
+  ssState = null;
+  if (wasHidden) {
+    revealStep('step-2');
+  } else {
+    setTimeout(() => step2.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  }
+}
+
+function clearError() {
+  const el = document.getElementById('error-msg');
+  el.classList.remove('visible');
+  el.textContent = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('visible');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─────────────────────────────────────────────
+//  FORM RENDERING
+// ─────────────────────────────────────────────
+
+const FORM_TITLES = {
+  ztest: 'Two Proportions Test — Inputs',
+  ttest: 'Two Means Test — Inputs',
+  anova: 'Multiple Means (ANOVA) — Inputs',
+chisq: 'Multiple Proportions — Inputs',
+};
+
+function renderForm() {
+  document.getElementById('input-title').textContent = FORM_TITLES[currentScenario];
+  const container = document.getElementById('input-form');
+  if (currentScenario === 'ztest') container.innerHTML = formZtest();
+  else if (currentScenario === 'ttest') container.innerHTML = formTtest();
+  else if (currentScenario === 'anova') { container.innerHTML = formAnova(); }
+else if (currentScenario === 'chisq') { container.innerHTML = formChiSq(); }
+}
+
+function field(id, label, placeholder, type='number') {
+  return `<div class="field"><label for="${id}">${label}</label><input type="${type}" id="${id}" placeholder="${placeholder}"></div>`;
+}
+
+function formZtest() {
+  return `
+    <div class="group-label">Control (A)</div>
+    <div class="form-row cols-2">
+      <div class="field"><label for="z-n1">Observations</label><input type="number" id="z-n1" placeholder="e.g. 1000" oninput="updateZpreview()"></div>
+      <div class="field"><label for="z-c1">Successes</label><input type="number" id="z-c1" placeholder="e.g. 100" oninput="updateZpreview()"></div>
+    </div>
+    <div class="ttest-preview" id="z-preview-a">Enter values above.</div>
+    <div class="group-label treatment" style="margin-top:14px;">Treatment (B)</div>
+    <div class="form-row cols-2">
+      <div class="field"><label for="z-n2">Observations</label><input type="number" id="z-n2" placeholder="e.g. 1000" oninput="updateZpreview()"></div>
+      <div class="field"><label for="z-c2">Successes</label><input type="number" id="z-c2" placeholder="e.g. 130" oninput="updateZpreview()"></div>
+    </div>
+    <div class="ttest-preview" id="z-preview-b">Enter values above.</div>
+    <div class="ttest-preview" id="z-preview-diff" style="margin-top:8px; border-top:2px solid #E2E8F0; padding-top:10px;"></div>`;
+}
+
+function formTtest() {
+  return `
+    <p style="font-size:0.82rem;color:#64748B;margin-bottom:14px;">
+      Enter each individual observation — separate values with commas, spaces, or new lines.
+      Sample size, mean, and SD are computed automatically.
+    </p>
+    <div class="form-row cols-2" style="align-items:start;">
+      <div>
+        <div class="group-label">Control (A)</div>
+        <div class="field">
+          <label for="t-data-a">Observations</label>
+          <textarea id="t-data-a" rows="6"
+            placeholder="e.g.&#10;42, 38, 45, 51&#10;39, 44, 36, 48"
+            oninput="updateTtestPreview()"></textarea>
+        </div>
+        <div class="ttest-preview" id="t-preview-a">Enter values above.</div>
+      </div>
+      <div>
+        <div class="group-label treatment">Treatment (B)</div>
+        <div class="field">
+          <label for="t-data-b">Observations</label>
+          <textarea id="t-data-b" rows="6"
+            placeholder="e.g.&#10;47, 52, 49, 55&#10;43, 58, 50, 53"
+            oninput="updateTtestPreview()"></textarea>
+        </div>
+        <div class="ttest-preview" id="t-preview-b">Enter values above.</div>
+      </div>
+    </div>
+    <div class="ttest-preview" id="t-preview-diff" style="margin-top:8px; border-top:2px solid #E2E8F0; padding-top:10px;"></div>`;
+}
+
+function formAnova() {
+  const colors = ['#1C7599','#FCB426','#6BA2B8','#062430','#2A9DC5'];
+  const names = ['Control','Treatment B','Variant C','Variant D','Variant E'];
+  let html = '<div id="anova-variants">';
+  for (let i = 0; i < 3; i++) {
+    html += anovaRow(i, names[i], colors[i]);
+  }
+  html += '</div>';
+  html += `<button class="btn-add" onclick="addAnovaRow()">+ Add Variant</button>`;
+  return html;
+}
+
+function anovaRow(i, nameVal, color) {
+  const colors = ['#1C7599','#FCB426','#6BA2B8','#062430','#2A9DC5'];
+  const col = color || colors[i % colors.length];
+  const canRemove = i >= 2;
+  return `
+    <div id="anova-row-${i}" style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <input type="text" id="anov-name-${i}" value="${nameVal || 'Variant '+(i+1)}"
+          style="font-size:0.85rem;font-weight:700;color:${col};border:none;border-bottom:2px solid ${col};background:transparent;padding:2px 4px;width:180px;outline:none;">
+        <button class="btn-remove" onclick="removeAnovaRow(${i})"
+          ${canRemove ? '' : 'style="visibility:hidden"'} title="Remove">&#10005;</button>
+      </div>
+      <div class="field">
+        <textarea id="anov-data-${i}" rows="3"
+          placeholder="e.g. 42, 47, 51, 38, 44, 55"
+          oninput="updateAnovaPreview(${i})"></textarea>
+      </div>
+      <div class="ttest-preview" id="anov-preview-${i}">Enter values above.</div>
+    </div>`;
+}
+
+function updateAnovaPreview(i) {
+  const data = parseTtestData(`anov-data-${i}`);
+  const el = document.getElementById(`anov-preview-${i}`);
+  if (!el) return;
+  if (data.length < 1) {
+    el.textContent = 'Enter values above.';
+    el.classList.remove('has-data');
+    return;
+  }
+  const m = sampleMean(data);
+  const s = data.length >= 2 ? sampleSD(data) : null;
+  el.innerHTML = `n = <strong>${data.length}</strong> &nbsp;|&nbsp; ` +
+    `mean = <strong>${m.toFixed(4)}</strong> &nbsp;|&nbsp; ` +
+    `SD = <strong>${s !== null ? s.toFixed(4) : '&mdash;'}</strong>`;
+  el.classList.add('has-data');
+}
+
+let anovaRowCount = 3;
+
+function addAnovaRow() {
+  if (anovaRowCount >= 5) { showError('Maximum 5 variants supported.'); return; }
+  clearError();
+  const colors = ['#1C7599','#FCB426','#6BA2B8','#062430','#2A9DC5'];
+  const names = ['Control','Treatment B','Variant C','Variant D','Variant E'];
+  const i = anovaRowCount;
+  const div = document.createElement('div');
+  div.innerHTML = anovaRow(i, names[i], colors[i]);
+  document.getElementById('anova-variants').appendChild(div.firstElementChild);
+  anovaRowCount++;
+}
+
+
+function removeAnovaRow(i) {
+  const row = document.getElementById(`anova-row-${i}`);
+  if (row) row.remove();
+}
+
+function formChiSq() {
+  chiSqRowCount = 3;
+  const names = ['Control','Variant B','Variant C','Variant D','Variant E','Variant F','Variant G','Variant H'];
+  let html = '<div id="chisq-variants">';
+  for (let i = 0; i < 3; i++) html += chiSqRow(i, names[i]);
+  html += '</div>';
+  html += `<button class="btn-add" onclick="addChiSqRow()">+ Add Variant</button>`;
+  return html;
+}
+
+function chiSqRow(i, nameVal) {
+  const col = COLORS[i % COLORS.length];
+  const canRemove = i >= 2;
+  return `
+    <div class="variant-row" id="chisq-row-${i}" style="grid-template-columns:120px 1fr 1fr auto;">
+      <div class="field">
+        <label style="color:${col}">Variant ${i+1} Name</label>
+        <input type="text" id="chisq-name-${i}" value="${nameVal || 'Variant '+(i+1)}" placeholder="Name">
+      </div>
+      <div class="field">
+        <label>Observations (n)</label>
+        <input type="number" id="chisq-n-${i}" placeholder="e.g. 1000">
+      </div>
+      <div class="field">
+        <label>Successes</label>
+        <input type="number" id="chisq-c-${i}" placeholder="e.g. 100">
+      </div>
+      <button class="btn-remove" onclick="removeChiSqRow(${i})"
+        ${canRemove ? '' : 'style="visibility:hidden"'} title="Remove">&#10005;</button>
+    </div>`;
+}
+
+let chiSqRowCount = 3;
+
+function addChiSqRow() {
+  if (chiSqRowCount >= 8) { showError('Maximum 8 variants supported.'); return; }
+  clearError();
+  const names = ['Control','Variant B','Variant C','Variant D','Variant E','Variant F','Variant G','Variant H'];
+  const i = chiSqRowCount;
+  const div = document.createElement('div');
+  div.innerHTML = chiSqRow(i, names[i]);
+  document.getElementById('chisq-variants').appendChild(div.firstElementChild);
+  chiSqRowCount++;
+}
+
+function removeChiSqRow(i) {
+  const row = document.getElementById(`chisq-row-${i}`);
+  if (row) row.remove();
+}
+
+function getChiSqData() {
+  const rows = document.querySelectorAll('[id^="chisq-row-"]');
+  const variants = [];
+  for (const row of rows) {
+    const id = row.id.replace('chisq-row-', '');
+    const name = getStr(`chisq-name-${id}`);
+    const n = getNum(`chisq-n-${id}`);
+    const c = getNum(`chisq-c-${id}`);
+    if (n !== null || c !== null) {
+      variants.push({ name: name || `Variant ${parseInt(id)+1}`, n, c, id });
+    }
+  }
+  return variants;
+}
+
+// ─────────────────────────────────────────────
+//  INPUT PARSING & VALIDATION
+// ─────────────────────────────────────────────
+
+function getNum(id) {
+  const v = parseFloat(document.getElementById(id)?.value);
+  return isNaN(v) ? null : v;
+}
+
+function getStr(id) {
+  return document.getElementById(id)?.value?.trim() || '';
+}
+
+function parseCSV(id) {
+  const raw = document.getElementById(id)?.value || '';
+  const vals = raw.split(/[\s,;]+/).map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+  return vals;
+}
+
+function parseTtestData(id) {
+  const raw = document.getElementById(id)?.value || '';
+  return raw.split(/[\s,;\n]+/).map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+}
+
+function sampleMean(arr) {
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+function sampleSD(arr) {
+  if (arr.length < 2) return 0;
+  const m = sampleMean(arr);
+  return Math.sqrt(arr.reduce((a, v) => a + (v - m) ** 2, 0) / (arr.length - 1));
+}
+
+function updateTtestPreview() {
+  const dataA = parseTtestData('t-data-a');
+  const dataB = parseTtestData('t-data-b');
+
+  [['a', dataA], ['b', dataB]].forEach(([g, data]) => {
+    const el = document.getElementById(`t-preview-${g}`);
+    if (!el) return;
+    if (data.length < 1) {
+      el.textContent = 'Enter values above.';
+      el.classList.remove('has-data');
+      return;
+    }
+    const m = sampleMean(data);
+    const s = data.length >= 2 ? sampleSD(data) : null;
+    el.innerHTML = `n = <strong>${data.length}</strong> &nbsp;|&nbsp; ` +
+      `mean = <strong>${m.toFixed(4)}</strong> &nbsp;|&nbsp; ` +
+      `SD = <strong>${s !== null ? s.toFixed(4) : '—'}</strong>`;
+    el.classList.add('has-data');
+  });
+
+  const elD = document.getElementById('t-preview-diff');
+  if (elD) {
+    if (dataA.length >= 1 && dataB.length >= 1) {
+      const diff = sampleMean(dataB) - sampleMean(dataA);
+      const sign = diff >= 0 ? '+' : '';
+      elD.innerHTML = `Difference (B &minus; A) = <strong>${sign}${diff.toFixed(4)}</strong>`;
+      elD.classList.add('has-data');
+    } else {
+      elD.textContent = '';
+      elD.classList.remove('has-data');
+    }
+  }
+}
+
+function updateZpreview() {
+  const n1 = getNum('z-n1'), c1 = getNum('z-c1');
+  const n2 = getNum('z-n2'), c2 = getNum('z-c2');
+  const elA = document.getElementById('z-preview-a');
+  const elB = document.getElementById('z-preview-b');
+  const elD = document.getElementById('z-preview-diff');
+  if (!elA) return;
+
+  if (n1 !== null && c1 !== null && n1 > 0) {
+    const p1 = c1 / n1;
+    elA.innerHTML = `n = <strong>${n1}</strong> &nbsp;|&nbsp; successes = <strong>${c1}</strong> &nbsp;|&nbsp; rate = <strong>${(p1 * 100).toFixed(2)}%</strong>`;
+    elA.classList.add('has-data');
+  } else {
+    elA.textContent = 'Enter values above.';
+    elA.classList.remove('has-data');
+  }
+
+  if (n2 !== null && c2 !== null && n2 > 0) {
+    const p2 = c2 / n2;
+    elB.innerHTML = `n = <strong>${n2}</strong> &nbsp;|&nbsp; successes = <strong>${c2}</strong> &nbsp;|&nbsp; rate = <strong>${(p2 * 100).toFixed(2)}%</strong>`;
+    elB.classList.add('has-data');
+  } else {
+    elB.textContent = 'Enter values above.';
+    elB.classList.remove('has-data');
+  }
+
+  if (n1 && n2 && c1 !== null && c2 !== null && n1 > 0 && n2 > 0) {
+    const diff = (c2 / n2) - (c1 / n1);
+    const sign = diff >= 0 ? '+' : '';
+    elD.innerHTML = `Difference (B &minus; A) = <strong>${sign}${(diff * 100).toFixed(2)} pp</strong>`;
+    elD.classList.add('has-data');
+  } else {
+    elD.textContent = '';
+    elD.classList.remove('has-data');
+  }
+}
+
+function validateZtest() {
+  const n1 = getNum('z-n1'), c1 = getNum('z-c1'), n2 = getNum('z-n2'), c2 = getNum('z-c2');
+  if ([n1,c1,n2,c2].some(v => v === null)) return 'All fields are required.';
+  if (n1 <= 0 || n2 <= 0) return 'Sample sizes must be positive.';
+  if (c1 < 0 || c2 < 0) return 'Successes cannot be negative.';
+  if (c1 > n1) return 'Control successes cannot exceed observations.';
+  if (c2 > n2) return 'Treatment successes cannot exceed observations.';
+  return null;
+}
+
+function validateTtest() {
+  const a = parseTtestData('t-data-a'), b = parseTtestData('t-data-b');
+  if (a.length < 2) return 'Control (A) needs at least 2 numeric values.';
+  if (b.length < 2) return 'Treatment (B) needs at least 2 numeric values.';
+  return null;
+}
+
+function getAnovaData() {
+  const rows = document.querySelectorAll('[id^="anova-row-"]');
+  const variants = [];
+  for (const row of rows) {
+    const id = row.id.replace('anova-row-', '');
+    const name = getStr(`anov-name-${id}`);
+    const data = parseTtestData(`anov-data-${id}`);
+    if (data.length > 0) {
+      const n = data.length;
+      const m = sampleMean(data);
+      const s = n >= 2 ? sampleSD(data) : 0;
+      variants.push({ name: name || `Variant ${parseInt(id)+1}`, n, m, s, id });
+    }
+  }
+  return variants;
+}
+
+function validateAnova() {
+  const variants = getAnovaData();
+  if (variants.length < 2) return 'At least 2 variants with data required.';
+  for (const v of variants) {
+    if (v.n < 2) return `"${v.name}": needs at least 2 values.`;
+    if (v.s <= 0) return `"${v.name}": all values are identical — no variance to test.`;
+  }
+  return null;
+}
+
+function validateChiSq() {
+  const variants = getChiSqData();
+  if (variants.length < 2) return 'At least 2 variants required.';
+  for (const v of variants) {
+    if (v.n === null || v.c === null) return `All fields required for "${v.name}".`;
+    if (v.n <= 0) return `"${v.name}": observations must be positive.`;
+    if (v.c < 0) return `"${v.name}": successes cannot be negative.`;
+    if (v.c > v.n) return `"${v.name}": successes cannot exceed observations.`;
+  }
+  const totalC = variants.reduce((a, v) => a + v.c, 0);
+  const totalN = variants.reduce((a, v) => a + v.n, 0);
+  if (totalC === 0) return 'No successes recorded across any variant.';
+  if (totalC === totalN) return 'All observations succeeded — no variation to test.';
+  return null;
+}
+
+// ─────────────────────────────────────────────
+//  STATISTICAL TESTS
+// ─────────────────────────────────────────────
+
+function runZtest(alpha) {
+  const n1 = getNum('z-n1'), c1 = getNum('z-c1'), n2 = getNum('z-n2'), c2 = getNum('z-c2');
+  const p1 = c1 / n1, p2 = c2 / n2;
+  const z = normalQuantile(1 - alpha / 2);
+
+  // Logistic regression (2-group, binary outcome): closed-form MLEs and Wald SEs.
+  // β₀ = logit(p̂₁),  β₁ = logit(p̂₂) − logit(p̂₁)  (log-odds ratio)
+  // Individual group CIs: Wald interval on log-odds scale, back-transformed via sigmoid.
+  // Diff CI: delta method applied to the logistic model → SE = √(p1(1-p1)/n1 + p2(1-p2)/n2)
+  const ci1 = logisticCI(c1, n1, z);
+  const ci2 = logisticCI(c2, n2, z);
+  const diffCI = combineCI(p1, ci1, p2, ci2);
+
+  const lift = ((p2 - p1) / p1) * 100;
+  const cohensH = 2 * Math.asin(Math.sqrt(p2)) - 2 * Math.asin(Math.sqrt(p1));
+
+  // Odds ratio with Haldane-Anscombe correction (add 0.5) when any cell is zero
+  const adj = (c1 === 0 || n1 - c1 === 0 || c2 === 0 || n2 - c2 === 0) ? 0.5 : 0;
+  const or = ((c1 + adj) * (n2 - c2 + adj)) / ((n1 - c1 + adj) * (c2 + adj));
+  const logOrSE = Math.sqrt(1/(c1+adj) + 1/(n1-c1+adj) + 1/(c2+adj) + 1/(n2-c2+adj));
+  const orCI = [Math.exp(Math.log(or) - z * logOrSE), Math.exp(Math.log(or) + z * logOrSE)];
+  const pVal = fisherExactPValue(c1, n1, c2, n2);
+
+  return {
+    pVal, p1, p2, ci1, ci2, lift, n1, n2, c1, c2, cohensH, or, orCI, diffCI,
+    significant: pVal < alpha
+  };
+}
+
+function runTtest(alpha) {
+  const dataA = parseTtestData('t-data-a');
+  const dataB = parseTtestData('t-data-b');
+  const n1 = dataA.length, n2 = dataB.length;
+  const m1 = sampleMean(dataA), m2 = sampleMean(dataB);
+  const s1 = sampleSD(dataA), s2 = sampleSD(dataB);
+
+  const sem1 = s1 / Math.sqrt(n1), sem2 = s2 / Math.sqrt(n2);
+  const se = Math.sqrt(sem1 * sem1 + sem2 * sem2);
+  const t = (m2 - m1) / se;
+  // Welch-Satterthwaite degrees of freedom
+  const df = Math.pow(sem1 * sem1 + sem2 * sem2, 2) /
+    (Math.pow(sem1 * sem1, 2) / (n1 - 1) + Math.pow(sem2 * sem2, 2) / (n2 - 1));
+  const pVal = tDistPValue(t, df);
+  const cohensD = (m2 - m1) / Math.sqrt(((n1-1)*s1*s1 + (n2-1)*s2*s2) / (n1+n2-2));
+  const lift = ((m2 - m1) / Math.abs(m1)) * 100;
+
+  // Confidence intervals for each mean
+  const tc = tCritical(df, alpha);
+  const ci1 = [m1 - tc * sem1, m1 + tc * sem1];
+  const ci2 = [m2 - tc * sem2, m2 + tc * sem2];
+
+  const diff = m2 - m1;
+  const diffCI = [diff - tc * se, diff + tc * se];
+
+  return {
+    t, df, pVal, m1, m2, s1, s2, n1, n2, cohensD, lift, se, sem1, sem2, ci1, ci2, diffCI,
+    significant: pVal < alpha
+  };
+}
+
+function runAnova(alpha) {
+  const variants = getAnovaData();
+  const k = variants.length;
+  const N = variants.reduce((a, v) => a + v.n, 0);
+  const grandMean = variants.reduce((a, v) => a + v.m * v.n, 0) / N;
+
+  // SSB (between groups)
+  const ssb = variants.reduce((a, v) => a + v.n * Math.pow(v.m - grandMean, 2), 0);
+  // SSW (within groups) — from reported SD
+  const ssw = variants.reduce((a, v) => a + (v.n - 1) * v.s * v.s, 0);
+
+  const dfB = k - 1, dfW = N - k;
+  const msb = ssb / dfB, msw = ssw / dfW;
+  const F = msb / msw;
+  const pVal = fDistPValue(F, dfB, dfW);
+
+  // Eta-squared effect size
+  const sst = ssb + ssw;
+  const etaSq = ssb / sst;
+
+  // Per-variant 95% CIs for means
+  const variantCIs = variants.map(v => {
+    const sem = v.s / Math.sqrt(v.n);
+    const tc = tCritical(v.n - 1, alpha);
+    return [v.m - tc * sem, v.m + tc * sem];
+  });
+
+  return {
+    variants, variantCIs, F, dfB, dfW, msb, msw, pVal, grandMean, etaSq, N,
+    significant: pVal < alpha
+  };
+}
+
+function runChiSq(alpha) {
+  const variants = getChiSqData();
+  const k = variants.length;
+  const N = variants.reduce((a, v) => a + v.n, 0);
+  const totalC = variants.reduce((a, v) => a + v.c, 0);
+  const pPool = totalC / N;
+
+  // χ² = Σ (O - E)² / E across both cells (converted, not converted) per variant
+  let chi2 = 0;
+  const smallCells = [];
+  variants.forEach((v, i) => {
+    const eC  = v.n * pPool;
+    const eNo = v.n * (1 - pPool);
+    const oNo = v.n - v.c;
+    chi2 += (v.c - eC) ** 2 / eC + (oNo - eNo) ** 2 / eNo;
+    if (eC < 5 || eNo < 5) smallCells.push(v.name);
+  });
+
+  const df = k - 1;
+  const pVal = chiSqPValue(chi2, df);
+
+  // Cramér's V effect size (for k×2 table, min dimension = 2, so V = sqrt(χ²/N))
+  const cramersV = Math.sqrt(chi2 / N);
+
+  // Per-variant rates and Wilson score CIs
+  const rates = variants.map(v => v.c / v.n);
+  const cis   = variants.map(v => wilsonCI(v.c, v.n, alpha));
+
+  // Standardized residuals: (O - E) / sqrt(E) for the conversion cell
+  const stdResiduals = variants.map(v => {
+    const eC = v.n * pPool;
+    return (v.c - eC) / Math.sqrt(eC * (1 - pPool));
+  });
+
+  return {
+    variants, rates, cis, stdResiduals, chi2, df, pVal,
+    cramersV, N, pPool, k, smallCells,
+    significant: pVal < alpha
+  };
+}
+
+// ─────────────────────────────────────────────
+//  RESULTS RENDERING
+// ─────────────────────────────────────────────
+
+function fmt(n, dec=4) {
+  if (n === null || n === undefined || isNaN(n)) return 'N/A';
+  if (Math.abs(n) < 0.0001 && n !== 0) return n.toExponential(3);
+  return n.toFixed(dec);
+}
+function fmtPct(n, dec=2) { return (n*100).toFixed(dec) + '%'; }
+function fmtPVal(p) { return p < 0.0001 ? '< 0.0001' : p.toFixed(4); }
+
+function renderStatBoxes(boxes) {
+  document.getElementById('stat-boxes').innerHTML = boxes.map(b => `
+    <div class="stat-box">
+      <div class="stat-box-label">${b.label}</div>
+      <div class="stat-box-value">${b.value}</div>
+      ${b.sub ? `<div class="stat-box-sub">${b.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderEffectBoxes(boxes) {
+  document.getElementById('effect-boxes').innerHTML = boxes.map(b => `
+    <div class="stat-box">
+      <div class="stat-box-label">${b.label}</div>
+      <div class="stat-box-value">${b.value}</div>
+      ${b.sub ? `<div class="stat-box-sub">${b.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderInterpretation(html) {
+  const el = document.getElementById('interpretation-text');
+  el.className = 'interpretation';
+  el.innerHTML = html;
+}
+
+function renderEffectText(html) {
+  const el = document.getElementById('effect-text');
+  el.className = 'interpretation';
+  el.style.marginTop = '12px';
+  el.innerHTML = html;
+}
+
+function showResults() {
+  revealStep('step-3');
+}
+
+function showEffectSize() {
+  if (!currentResult) return;
+  hideStep('step-4');
+  renderEffectSection(currentScenario, currentResult, currentAlpha);
+  revealStep('step-4');
+}
+
+function renderEffectSection(scenario, res, alpha) {
+  const ciPct = Math.round((1 - alpha) * 100);
+  const ssBtn = document.getElementById('btn-show-ss');
+  if (ssBtn) ssBtn.style.display = (scenario === 'ztest' || scenario === 'ttest') ? 'block' : 'none';
+
+  if (scenario === 'ztest') {
+    const orIncludes1 = res.orCI[0] <= 1 && res.orCI[1] >= 1;
+    renderEffectBoxes([
+      { label: 'Odds Ratio', value: fmt(res.or, 3), sub: `${ciPct}% CI: [${fmt(res.orCI[0],3)}, ${fmt(res.orCI[1],3)}]` },
+      { label: 'Relative Lift', value: (res.lift >= 0 ? '+' : '') + res.lift.toFixed(2) + '%' },
+      { label: "Cohen's h", value: fmt(Math.abs(res.cohensH), 3), sub: '|h| < 0.2 small, 0.2–0.5 medium, > 0.8 large' },
+      { label: "Fisher's P-Value", value: fmtPVal(res.pVal) },
+    ]);
+    renderEffectText(
+      `Odds ratio = ${fmt(res.or, 3)} (${ciPct}% CI: [${fmt(res.orCI[0],3)}, ${fmt(res.orCI[1],3)}]). ` +
+      (orIncludes1
+        ? `This interval <strong>includes 1</strong>, consistent with no difference in odds.`
+        : `This interval <strong>excludes 1</strong>, consistent with a real difference in odds.`) +
+      ` Relative lift = ${(res.lift >= 0 ? '+' : '') + res.lift.toFixed(1)}%. ` +
+      `Cohen's h = ${fmt(Math.abs(res.cohensH), 3)} (|h| < 0.2 small, 0.2–0.5 medium, > 0.8 large). ` +
+      `Fisher's exact p-value = ${fmtPVal(res.pVal)}.`
+    );
+
+  } else if (scenario === 'ttest') {
+    renderEffectBoxes([
+      { label: "Cohen's d", value: fmt(Math.abs(res.cohensD), 3), sub: '|d| < 0.2 small, 0.5 medium, > 0.8 large' },
+      { label: 'Relative Lift', value: (res.lift >= 0 ? '+' : '') + res.lift.toFixed(2) + '%' },
+      { label: 'T-Statistic', value: fmt(res.t, 4) },
+      { label: 'df (Welch)', value: res.df.toFixed(2) },
+      { label: 'P-Value', value: fmtPVal(res.pVal) },
+    ]);
+    renderEffectText(
+      `Cohen's d = ${fmt(Math.abs(res.cohensD), 3)} (|d| < 0.2 small, 0.2–0.5 medium, > 0.8 large). ` +
+      `Welch's t(${res.df.toFixed(1)}) = ${fmt(res.t, 4)}, p = ${fmtPVal(res.pVal)}. ` +
+      `Relative lift = ${(res.lift >= 0 ? '+' : '') + res.lift.toFixed(1)}%.`
+    );
+
+  } else if (scenario === 'anova') {
+    renderEffectBoxes([
+      { label: 'Eta-Squared (\u03b7\u00b2)', value: fmt(res.etaSq, 3), sub: 'proportion of variance explained' },
+      { label: 'F-Statistic', value: fmt(res.F, 4), sub: `F(${res.dfB}, ${res.dfW})` },
+      { label: 'P-Value', value: fmtPVal(res.pVal) },
+    ]);
+    renderEffectText(
+      `F(${res.dfB}, ${res.dfW}) = ${fmt(res.F, 3)}, p = ${fmtPVal(res.pVal)}. ` +
+      `Eta-squared \u03b7\u00b2 = ${fmt(res.etaSq, 3)} — the proportion of total variance explained by group membership ` +
+      `(\u03b7\u00b2 \u2248 0.01 small, 0.06 medium, 0.14 large). ` +
+      `<strong>If variants differ:</strong> run a post-hoc test (e.g., Tukey HSD) to identify which specific pairs differ.`
+    );
+
+  } else if (scenario === 'chisq') {
+    const residualStr = res.variants
+      .map((v, i) => `${v.name}: ${res.stdResiduals[i] >= 0 ? '+' : ''}${res.stdResiduals[i].toFixed(2)}`)
+      .join(', ');
+    const smallNote = res.smallCells.length
+      ? ` <em>Note: expected counts < 5 for ${res.smallCells.join(', ')} — chi-squared approximation may be unreliable.</em>`
+      : '';
+    renderEffectBoxes([
+      { label: "Cram\u00e9r's V", value: fmt(res.cramersV, 3), sub: 'V > 0.1 small, > 0.3 medium, > 0.5 large' },
+      { label: '\u03c7\u00b2 Statistic', value: fmt(res.chi2, 4) },
+      { label: 'df', value: res.df },
+      { label: 'P-Value', value: fmtPVal(res.pVal) },
+    ]);
+    renderEffectText(
+      `\u03c7\u00b2(${res.df}) = ${fmt(res.chi2, 3)}, p = ${fmtPVal(res.pVal)}. ` +
+      `Cram\u00e9r's V = ${fmt(res.cramersV, 3)} (V > 0.1 small, > 0.3 medium, > 0.5 large). ` +
+      `Standardized residuals per variant: ${residualStr}.${smallNote}`
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  CHARTS
+// ─────────────────────────────────────────────
+
+function destroyChart() {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  destroyDiffChart();
+}
+
+const COLORS = ['#1C7599','#FCB426','#6BA2B8','#062430','#2A9DC5','#E8A020','#8BBECE','#0A4D65'];
+const COLORS_ALPHA = ['rgba(28,117,153,0.15)','rgba(252,180,38,0.15)','rgba(107,162,184,0.15)','rgba(6,36,48,0.15)','rgba(42,157,197,0.15)','rgba(232,160,32,0.15)','rgba(139,190,206,0.15)','rgba(10,77,101,0.15)'];
+
+// ─────────────────────────────────────────────
+//  DATA VISUALIZATION (STEP 3 — HISTOGRAMS)
+// ─────────────────────────────────────────────
+
+function destroyHistChart() {
+  if (histChartInstance) { histChartInstance.destroy(); histChartInstance = null; }
+}
+
+function plotData() {
+  clearError();
+  let err = null;
+  if (currentScenario === 'ztest')  err = validateZtest();
+  else if (currentScenario === 'ttest')  err = validateTtest();
+  else if (currentScenario === 'anova')  err = validateAnova();
+  else if (currentScenario === 'chisq') err = validateChiSq();
+  if (err) { showError(err); return; }
+
+  destroyHistChart();
+  hideStep('step-3');
+  hideStep('step-4');
+  hideStep('step-5');
+
+  const ctx = document.getElementById('hist-chart').getContext('2d');
+
+  if (currentScenario === 'ztest') {
+    const n1 = getNum('z-n1'), c1 = getNum('z-c1');
+    const n2 = getNum('z-n2'), c2 = getNum('z-c2');
+    histChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['No Success', 'Success'],
+        datasets: [
+          { label: 'Control (A)',    data: [n1 - c1, c1], backgroundColor: COLORS_ALPHA[0], borderColor: COLORS[0], borderWidth: 2, borderRadius: 4 },
+          { label: 'Treatment (B)', data: [n2 - c2, c2], backgroundColor: COLORS_ALPHA[1], borderColor: COLORS[1], borderWidth: 2, borderRadius: 4 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12 } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } }
+      }
+    });
+
+  } else if (currentScenario === 'ttest') {
+    drawContinuousHistograms(ctx, [
+      { data: parseTtestData('t-data-a'), label: 'Control (A)',    color: COLORS[0], colorAlpha: COLORS_ALPHA[0] },
+      { data: parseTtestData('t-data-b'), label: 'Treatment (B)', color: COLORS[1], colorAlpha: COLORS_ALPHA[1] },
+    ]);
+
+  } else if (currentScenario === 'anova') {
+    const variants = getAnovaData();
+    drawContinuousHistograms(ctx, variants.map((v, i) => ({
+      data: parseTtestData(`anov-data-${v.id}`),
+      label: v.name,
+      color: COLORS[i % COLORS.length],
+      colorAlpha: COLORS_ALPHA[i % COLORS.length],
+    })));
+
+  } else if (currentScenario === 'chisq') {
+    const variants = getChiSqData();
+    histChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['No Success', 'Success'],
+        datasets: variants.map((v, i) => ({
+          label: v.name,
+          data: [v.n - v.c, v.c],
+          backgroundColor: COLORS_ALPHA[i % COLORS.length],
+          borderColor: COLORS[i % COLORS.length],
+          borderWidth: 2, borderRadius: 4,
+        }))
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12 } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } }
+      }
+    });
+  }
+
+  revealStep('step-hist');
+}
+
+function drawContinuousHistograms(ctx, groups) {
+  const allData = groups.flatMap(g => g.data).sort((a, b) => a - b);
+  const n = allData.length;
+  const minVal = allData[0], maxVal = allData[n - 1];
+  const range = maxVal - minVal;
+
+  // Freedman-Diaconis rule; fall back to Scott's if IQR = 0
+  const q1 = allData[Math.floor(n * 0.25)];
+  const q3 = allData[Math.ceil(n * 0.75) - 1] ?? allData[n - 1];
+  const iqr = q3 - q1;
+  let binWidth = iqr > 0
+    ? 2 * iqr * Math.pow(n, -1 / 3)
+    : 3.49 * sampleSD(allData) * Math.pow(n, -1 / 3);
+  if (!(binWidth > 0)) binWidth = range || 1;
+
+  const nBins = Math.min(Math.max(Math.ceil(range / binWidth), 1), 40);
+  const w = range / nBins;
+  const edges = Array.from({ length: nBins + 1 }, (_, i) => minVal + i * w);
+
+  const labels = edges.slice(0, -1).map((lo, i) =>
+    `${lo.toFixed(2)}–${edges[i + 1].toFixed(2)}`
+  );
+
+  function countGroup(data) {
+    return edges.slice(0, -1).map((lo, i) => {
+      const hi = edges[i + 1];
+      return data.filter(v => v >= lo && (i === nBins - 1 ? v <= hi : v < hi)).length;
+    });
+  }
+
+  histChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: groups.map(g => ({
+        label: g.label,
+        data: countGroup(g.data),
+        backgroundColor: g.colorAlpha,
+        borderColor: g.color,
+        borderWidth: 1.5,
+        borderRadius: 2,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12 } } },
+      scales: {
+        x: { title: { display: true, text: 'Value' }, ticks: { maxTicksLimit: 20 } },
+        y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+      }
+    }
+  });
+}
+
+function drawZtestChart(res, alpha) {
+  destroyChart();
+  const ctx = document.getElementById('result-chart').getContext('2d');
+  const vals = [res.p1 * 100, res.p2 * 100];
+  const ciData = [res.ci1, res.ci2];
+
+  // Y-axis zoomed to CI bounds so error bars are visible
+  const allBounds = [res.ci1[0]*100, res.ci1[1]*100, res.ci2[0]*100, res.ci2[1]*100];
+  const yPad = Math.max(Math.abs(res.p2 - res.p1) * 100 * 0.3, 0.3);
+  const yMin = Math.max(0, Math.min(...allBounds) - yPad);
+  const yMax = Math.min(100, Math.max(...allBounds) + yPad);
+
+  // Error bar plugin — logistic regression Wald CIs on probability scale
+  const errorBarPlugin = {
+    id: 'ztestErrorBars',
+    afterDatasetsDraw(chart) {
+      const { ctx: c, scales: { x, y } } = chart;
+      const meta = chart.getDatasetMeta(0);
+      meta.data.forEach((bar, i) => {
+        const [lo, hi] = ciData[i];
+        const xPx = bar.x;
+        const yLo = y.getPixelForValue(lo * 100);
+        const yHi = y.getPixelForValue(hi * 100);
+        const capW = 8;
+        c.save();
+        c.strokeStyle = COLORS[i];
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(xPx, yLo); c.lineTo(xPx, yHi);
+        c.moveTo(xPx - capW, yLo); c.lineTo(xPx + capW, yLo);
+        c.moveTo(xPx - capW, yHi); c.lineTo(xPx + capW, yHi);
+        c.stroke();
+        c.restore();
+      });
+    }
+  };
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    plugins: [errorBarPlugin],
+    data: {
+      labels: ['Control (A)', 'Treatment (B)'],
+      datasets: [{
+        label: 'Conversion Rate',
+        data: vals,
+        backgroundColor: [COLORS_ALPHA[0], COLORS_ALPHA[1]],
+        borderColor: [COLORS[0], COLORS[1]],
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: c => ` ${c.raw.toFixed(2)}%` }
+      }},
+      scales: {
+        y: {
+          min: yMin, max: yMax,
+          title: { display: true, text: 'Conversion Rate (%)  \u2014  error bars = logistic regression CIs' },
+          ticks: { callback: v => v.toFixed(1) + '%' }
+        }
+      }
+    }
+  });
+
+  drawDiffCIChart(
+    res.p2 - res.p1, res.diffCI[0], res.diffCI[1], alpha,
+    'Risk Difference (B\u2212A)',
+    v => (v * 100).toFixed(2) + ' pp'
+  );
+}
+
+function drawTtestChart(res, alpha) {
+  destroyChart();
+  const ctx = document.getElementById('result-chart').getContext('2d');
+  const { sem1, sem2 } = res;
+
+  // Ensure CI bounds are always within the plot range
+  const pad = Math.max(sem1, sem2) * 2;
+  const lo = Math.min(res.ci1[0], res.ci2[0], res.m1, res.m2) - pad;
+  const hi = Math.max(res.ci1[1], res.ci2[1], res.m1, res.m2) + pad;
+
+  const steps = 200;
+  const xs = Array.from({length: steps}, (_, i) => lo + (hi - lo) * i / (steps - 1));
+
+  const ciPlugin = {
+    id: 'ttestCIs',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x } } = chart;
+      const ca = chart.chartArea;
+      [
+        { mean: res.m1, ci: res.ci1, color: COLORS[0] },
+        { mean: res.m2, ci: res.ci2, color: COLORS[1] },
+      ].forEach(({ mean, ci, color }) => {
+        const pxMean = x.getPixelForValue(mean);
+        const pxLo   = x.getPixelForValue(ci[0]);
+        const pxHi   = x.getPixelForValue(ci[1]);
+        ctx.save();
+        ctx.strokeStyle = color;
+
+        // Dashed CI bound lines
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        [pxLo, pxHi].forEach(px => {
+          ctx.beginPath(); ctx.moveTo(px, ca.top); ctx.lineTo(px, ca.bottom); ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Solid mean line
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(pxMean, ca.top); ctx.lineTo(pxMean, ca.bottom); ctx.stroke();
+
+        ctx.restore();
+      });
+    }
+  };
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    plugins: [ciPlugin],
+    data: {
+      datasets: [
+        {
+          label: 'Control (A)',
+          data: xs.map(x => ({x, y: normalPDF(x, res.m1, sem1)})),
+          borderColor: COLORS[0], backgroundColor: COLORS_ALPHA[0],
+          borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0,
+        },
+        {
+          label: 'Treatment (B)',
+          data: xs.map(x => ({x, y: normalPDF(x, res.m2, sem2)})),
+          borderColor: COLORS[1], backgroundColor: COLORS_ALPHA[1],
+          borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12 } },
+        tooltip: { callbacks: { label: () => null } }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Value  \u2014  solid = mean  |  dashed = CI bounds  |  see CI of difference below' },
+          ticks: { maxTicksLimit: 8 },
+          min: lo, max: hi,
+        },
+        y: { display: false }
+      }
+    }
+  });
+
+  drawDiffCIChart(
+    res.m2 - res.m1, res.diffCI[0], res.diffCI[1], alpha,
+    'Mean Difference (B\u2212A)',
+    v => v.toFixed(3)
+  );
+}
+
+function drawAnovaChart(res) {
+  destroyChart();
+  const ctx = document.getElementById('result-chart').getContext('2d');
+  const ciData = res.variantCIs; // [[lo,hi], ...]
+
+  // Set y-axis range zoomed to mean ± CI so error bars are clearly visible
+  const allCI = ciData.flat();
+  const ciRange = Math.max(...allCI) - Math.min(...allCI);
+  const pad = Math.max(ciRange * 0.5, 0.5);
+  const yMin = Math.min(...allCI) - pad;
+  const yMax = Math.max(...allCI) + pad;
+
+  const errBarPlugin = {
+    id: 'errBars',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x, y } } = chart;
+      chart.data.datasets[0].data.forEach((val, i) => {
+        const cx = x.getPixelForValue(i);
+        // Clamp to chart area so partially out-of-range CIs don't vanish
+        const ca = chart.chartArea;
+        const top = Math.max(ca.top, y.getPixelForValue(ciData[i][1]));
+        const bot = Math.min(ca.bottom, y.getPixelForValue(ciData[i][0]));
+        const barColor = COLORS[i % COLORS.length];
+        ctx.save();
+        ctx.strokeStyle = barColor;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(cx, top); ctx.lineTo(cx, bot); ctx.stroke();
+        [top, bot].forEach(py => {
+          ctx.beginPath(); ctx.moveTo(cx - 7, py); ctx.lineTo(cx + 7, py); ctx.stroke();
+        });
+        ctx.restore();
+      });
+    }
+  };
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    plugins: [errBarPlugin],
+    data: {
+      labels: res.variants.map(v => v.name),
+      datasets: [{
+        label: 'Mean',
+        data: res.variants.map(v => v.m),
+        backgroundColor: res.variants.map((_, i) => COLORS_ALPHA[i % COLORS.length]),
+        borderColor: res.variants.map((_, i) => COLORS[i % COLORS.length]),
+        borderWidth: 2, borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          min: yMin, max: yMax,
+          title: { display: true, text: 'Mean (error bars = 95% CI)' }
+        }
+      }
+    }
+  });
+}
+
+function drawChiSqChart(res) {
+  destroyChart();
+  const ctx = document.getElementById('result-chart').getContext('2d');
+
+  // CIs in % for the plugin
+  const cisPct = res.cis.map(ci => [ci[0] * 100, ci[1] * 100]);
+  const ratesPct = res.rates.map(r => r * 100);
+
+  // Zoom y-axis to data + CI range
+  const allPct = [...ratesPct, ...cisPct.flat()].filter(v => v >= 0);
+  const yPad = Math.max((Math.max(...allPct) - Math.min(...allPct)) * 0.4, 0.5);
+  const yMin = Math.max(0, Math.min(...allPct) - yPad);
+  const yMax = Math.min(100, Math.max(...allPct) + yPad);
+
+  const errBarPlugin = {
+    id: 'errBars',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x, y } } = chart;
+      chart.data.datasets[0].data.forEach((val, i) => {
+        const cx  = x.getPixelForValue(i);
+        const top = y.getPixelForValue(cisPct[i][1]);
+        const bot = y.getPixelForValue(cisPct[i][0]);
+        ctx.save();
+        ctx.strokeStyle = COLORS[i % COLORS.length];
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(cx, top); ctx.lineTo(cx, bot); ctx.stroke();
+        [top, bot].forEach(py => {
+          ctx.beginPath(); ctx.moveTo(cx - 7, py); ctx.lineTo(cx + 7, py); ctx.stroke();
+        });
+        ctx.restore();
+      });
+    }
+  };
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    plugins: [errBarPlugin],
+    data: {
+      labels: res.variants.map(v => v.name),
+      datasets: [{
+        label: 'Conversion Rate',
+        data: ratesPct,
+        backgroundColor: res.variants.map((_, i) => COLORS_ALPHA[i % COLORS.length]),
+        borderColor:      res.variants.map((_, i) => COLORS[i % COLORS.length]),
+        borderWidth: 2, borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.raw.toFixed(2)}%` } }
+      },
+      scales: {
+        y: {
+          min: yMin, max: yMax,
+          title: { display: true, text: 'Conversion Rate (%)  — error bars = 95% CI' },
+          ticks: { callback: v => v.toFixed(1) + '%' }
+        }
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  MAIN RUN FUNCTION
+// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+//  SAMPLE SIZE & PRECISION (STEP 5)
+// ─────────────────────────────────────────────
+
+let ssState = null;
+let ssDiffChartInstance = null;
+let ssChartData = null; // mutable state read by the chart plugin
+
+function nToSlider(n, nMin, nMax) {
+  return Math.round((Math.log(n) - Math.log(nMin)) / (Math.log(nMax) - Math.log(nMin)) * 100);
+}
+function sliderToN(val, nMin, nMax) {
+  const t = val / 100;
+  return Math.max(nMin, Math.round(Math.exp(Math.log(nMin) + t * (Math.log(nMax) - Math.log(nMin)))));
+}
+
+function computeSSdiffCI(state, nPerGroup) {
+  if (state.scenario === 'ztest') {
+    const c1h = Math.round(state.p1 * nPerGroup);
+    const c2h = Math.round(state.p2 * nPerGroup);
+    const p1h = c1h / nPerGroup, p2h = c2h / nPerGroup;
+    const z = normalQuantile(1 - state.alpha / 2);
+    const ci1h = logisticCI(c1h, nPerGroup, z);
+    const ci2h = logisticCI(c2h, nPerGroup, z);
+    return combineCI(p1h, ci1h, p2h, ci2h);
+  } else {
+    const sem1 = state.s1 / Math.sqrt(nPerGroup);
+    const sem2 = state.s2 / Math.sqrt(nPerGroup);
+    const se = Math.sqrt(sem1 * sem1 + sem2 * sem2);
+    const df = Math.pow(sem1*sem1 + sem2*sem2, 2) /
+      (Math.pow(sem1*sem1, 2)/(nPerGroup-1) + Math.pow(sem2*sem2, 2)/(nPerGroup-1));
+    const tc = tCritical(df, state.alpha);
+    return [state.diff - tc * se, state.diff + tc * se];
+  }
+}
+
+function findMinN(state) {
+  if (state.diff === 0) return null;
+  const ciHuge = computeSSdiffCI(state, 2000000);
+  if (ciHuge[0] <= 0 && ciHuge[1] >= 0) return null; // undetectable
+  let lo = 2, hi = 2000000;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const ci = computeSSdiffCI(state, mid);
+    if (ci[0] > 0 || ci[1] < 0) hi = mid; else lo = mid + 1;
+  }
+  return lo;
+}
+
+function showSampleSizeStep() {
+  if (!currentResult) return;
+  hideStep('step-5');
+  initSampleSizeStep();
+  revealStep('step-5');
+}
+
+function initSampleSizeStep() {
+  const res = currentResult;
+  const alpha = currentAlpha;
+  const scenario = currentScenario;
+  const ciPct = Math.round((1 - alpha) * 100);
+
+  ssState = scenario === 'ztest'
+    ? { scenario, alpha, p1: res.p1, p2: res.p2, diff: res.p2 - res.p1, s1: null, s2: null,
+        nObs: Math.round((res.n1 + res.n2) / 2) }
+    : { scenario, alpha, m1: res.m1, m2: res.m2, s1: res.s1, s2: res.s2,
+        diff: res.m2 - res.m1, nObs: Math.round((res.n1 + res.n2) / 2) };
+
+  ssState.minN = findMinN(ssState);
+  ssState.nMin = Math.max(5, Math.floor(ssState.nObs * 0.05));
+  ssState.nMax = ssState.nObs * 20;
+  // Ensure minN (if found) is within slider range
+  if (ssState.minN && ssState.minN > ssState.nMax) ssState.nMax = ssState.minN * 3;
+  ssState.formatFn = scenario === 'ztest' ? v => (v*100).toFixed(2)+' pp' : v => v.toFixed(3);
+  ssState.fmtSigned = scenario === 'ztest'
+    ? v => fmtPp(v)
+    : v => (v >= 0 ? '+' : '') + v.toFixed(3);
+
+  // Effect size slider setup
+  ssState.effectSign = ssState.diff >= 0 ? 1 : -1;
+  const absEffect = Math.abs(ssState.diff);
+  ssState.effectObs = absEffect;
+  if (scenario === 'ztest') {
+    const maxPoss = ssState.effectSign > 0 ? (1 - ssState.p1) : ssState.p1;
+    ssState.effectMax = Math.min(Math.max(absEffect * 3, 0.05), maxPoss * 0.99);
+  } else {
+    ssState.effectMax = Math.max(absEffect * 3, Math.max(res.s1, res.s2));
+  }
+  document.getElementById('ss-effect-min-label').textContent = ssState.formatFn(0);
+  document.getElementById('ss-effect-max-label').textContent = ssState.fmtSigned(ssState.effectMax * ssState.effectSign);
+  document.getElementById('ss-effect-footer').textContent =
+    `Observed effect: ${ssState.fmtSigned(ssState.diff)}  \u2014  range: ${ssState.formatFn(0)} to ${ssState.fmtSigned(ssState.effectMax * ssState.effectSign)}`;
+  document.getElementById('ss-effect-slider').value =
+    ssState.effectMax > 0 ? Math.round((absEffect / ssState.effectMax) * 100) : 50;
+
+  // Intro text
+  const diffStr = scenario === 'ztest'
+    ? `Control: ${fmtPct(res.p1)}, Treatment: ${fmtPct(res.p2)}`
+    : `A: ${fmt(res.m1,3)}, B: ${fmt(res.m2,3)} (SD\u2090: ${fmt(res.s1,3)}, SD\u2091: ${fmt(res.s2,3)})`;
+  document.getElementById('ss-intro').innerHTML =
+    `Starting from the observed data (${diffStr}), use the sliders to explore how the ${ciPct}% CI of the difference changes as you vary <strong>sample size</strong> and <strong>effect size</strong>.`;
+
+  // Footer
+  document.getElementById('ss-footer').textContent =
+    `Observed n: ${ssState.nObs.toLocaleString()} per group (average)  \u2014  range: ${ssState.nMin.toLocaleString()} to ${ssState.nMax.toLocaleString()}`;
+
+  document.getElementById('ss-min-label').textContent = ssState.nMin.toLocaleString();
+  document.getElementById('ss-max-label').textContent = ssState.nMax.toLocaleString();
+
+  // Set slider to observed n
+  document.getElementById('ss-slider').value = nToSlider(ssState.nObs, ssState.nMin, ssState.nMax);
+
+  // Create the chart once with a fixed mutable state object
+  ssChartData = { diff: ssState.diff, ci: [0, 0], includesZero: true };
+  if (ssDiffChartInstance) { ssDiffChartInstance.destroy(); ssDiffChartInstance = null; }
+
+  const ssPlugin = {
+    id: 'ssDiffCI',
+    afterDatasetsDraw(chart) {
+      if (!ssChartData) return;
+      const { diff, ci, includesZero } = ssChartData;
+      const { ctx, scales: { x } } = chart;
+      const ca = chart.chartArea;
+      const midY = (ca.top + ca.bottom) / 2;
+      const clamp = v => Math.max(ca.left, Math.min(ca.right, v));
+      const pxLo = x.getPixelForValue(ci[0]);
+      const pxHi = x.getPixelForValue(ci[1]);
+      const pxDiff = x.getPixelForValue(diff);
+      const pxZero = x.getPixelForValue(0);
+
+      ctx.save();
+      ctx.fillStyle = includesZero ? 'rgba(148,163,184,0.15)' : 'rgba(28,117,153,0.12)';
+      ctx.fillRect(clamp(pxLo), midY - 12, clamp(pxHi) - clamp(pxLo), 24);
+
+      ctx.strokeStyle = includesZero ? '#94A3B8' : '#1C7599';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(clamp(pxLo), midY); ctx.lineTo(clamp(pxHi), midY); ctx.stroke();
+
+      [pxLo, pxHi].forEach(px => {
+        if (px >= ca.left && px <= ca.right) {
+          ctx.beginPath(); ctx.moveTo(px, midY - 9); ctx.lineTo(px, midY + 9); ctx.stroke();
+        }
+      });
+
+      ctx.fillStyle = includesZero ? '#94A3B8' : '#1C7599';
+      ctx.beginPath(); ctx.arc(clamp(pxDiff), midY, 6, 0, 2 * Math.PI); ctx.fill();
+
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(pxZero, ca.top); ctx.lineTo(pxZero, ca.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  };
+
+  const ctx = document.getElementById('ss-diff-chart').getContext('2d');
+  ssDiffChartInstance = new Chart(ctx, {
+    type: 'scatter',
+    plugins: [ssPlugin],
+    data: { datasets: [{ data: [] }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          type: 'linear', min: -1, max: 1,
+          title: { display: true, text: `${ciPct}% CI of difference  |  red line = 0 (no difference)` },
+          ticks: { maxTicksLimit: 7, callback: v => ssState.formatFn(v) }
+        },
+        y: { display: false }
+      }
+    }
+  });
+
+  updateSSChart();
+}
+
+function updateSSChart() {
+  if (!ssState || !ssDiffChartInstance) return;
+
+  // Sample size slider
+  const n = sliderToN(parseInt(document.getElementById('ss-slider').value), ssState.nMin, ssState.nMax);
+  document.getElementById('ss-n-display').textContent = n.toLocaleString();
+
+  // Effect size slider — update mutable ssState so computeSSdiffCI picks it up
+  const effectAbs = (parseInt(document.getElementById('ss-effect-slider').value) / 100) * ssState.effectMax;
+  const newDiff = effectAbs * ssState.effectSign;
+  ssState.diff = newDiff;
+  if (ssState.scenario === 'ztest') {
+    ssState.p2 = Math.max(0, Math.min(1, ssState.p1 + newDiff));
+  }
+  document.getElementById('ss-effect-display').textContent = ssState.fmtSigned(newDiff);
+
+  // Recompute minN for the current effect size
+  ssState.minN = findMinN(ssState);
+
+  // Adaptive nMax: always large enough that the user can slide to a detectable sample size
+  const targetNMax = ssState.minN
+    ? Math.max(ssState.minN * 2, ssState.nObs * 20)
+    : ssState.nObs * 20;
+  if (targetNMax !== ssState.nMax) {
+    ssState.nMax = targetNMax;
+    // Reposition slider so the displayed n doesn't jump
+    document.getElementById('ss-slider').value = nToSlider(n, ssState.nMin, ssState.nMax);
+    document.getElementById('ss-max-label').textContent = ssState.nMax.toLocaleString();
+    document.getElementById('ss-footer').textContent =
+      `Observed n: ${ssState.nObs.toLocaleString()} per group (average)  \u2014  range: ${ssState.nMin.toLocaleString()} to ${ssState.nMax.toLocaleString()}`;
+  }
+
+  const ci = computeSSdiffCI(ssState, n);
+  const ciWidth = ci[1] - ci[0];
+  const excludes0 = ci[0] > 0 || ci[1] < 0;
+  const ciPct = Math.round((1 - ssState.alpha) * 100);
+  const fmt3 = ssState.formatFn;
+
+  // Dynamic x-axis — adapts to current CI
+  const span = Math.abs(ciWidth);
+  const pad = Math.max(span * 0.4, Math.abs(newDiff) * 0.25, 0.001);
+  ssDiffChartInstance.options.scales.x.min = Math.min(ci[0], 0) - pad;
+  ssDiffChartInstance.options.scales.x.max = Math.max(ci[1], 0) + pad;
+
+  // Update mutable chart state and redraw
+  ssChartData.diff = newDiff;
+  ssChartData.ci = ci;
+  ssChartData.includesZero = !excludes0;
+  ssDiffChartInstance.update('none');
+
+  // Stat boxes
+  const accentStyle = excludes0
+    ? 'border-color:#6BA2B8;background:#EBF4FA'
+    : 'border-color:#FCA5A5;background:#FEF2F2';
+  const accentVal = excludes0 ? 'color:#1C7599' : 'color:#B91C1C';
+
+  const boxes = [
+    { label: 'n per group', value: n.toLocaleString(), sub: ssState.nObs.toLocaleString() + ' observed' },
+    { label: 'Current effect', value: ssState.fmtSigned(newDiff), sub: `observed: ${ssState.fmtSigned(ssState.effectObs * ssState.effectSign)}` },
+    { label: `${ciPct}% CI width`, value: fmt3(ciWidth), sub: 'narrower = more precise' },
+    { label: `${ciPct}% CI`, value: `[${fmt3(ci[0])}, ${fmt3(ci[1])}]` },
+    { label: 'CI excludes zero', value: excludes0 ? 'Yes \u2014 detectable' : 'No \u2014 inconclusive',
+      accent: true, excludes0 },
+  ];
+  if (ssState.minN) {
+    boxes.push({ label: 'Min n to detect', value: ssState.minN.toLocaleString(), sub: 'at this effect size' });
+  }
+
+  document.getElementById('ss-stat-boxes').innerHTML = boxes.map(b => `
+    <div class="stat-box" ${b.accent ? `style="${accentStyle}"` : ''}>
+      <div class="stat-box-label">${b.label}</div>
+      <div class="stat-box-value" ${b.accent ? `style="${accentVal}"` : ''}>${b.value}</div>
+      ${b.sub ? `<div class="stat-box-sub">${b.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function runTest() {
+  clearError();
+
+  const confLevel = parseFloat(document.getElementById('alpha-input').value);
+  if (isNaN(confLevel) || confLevel <= 0.5 || confLevel >= 1) {
+    showError('Confidence level must be between 0.5 and 1 (e.g. 0.95).');
+    return;
+  }
+  const alphaRaw = 1 - confLevel;
+  currentAlpha = alphaRaw;
+  const ciPct = Math.round(confLevel * 100);
+
+  if (currentScenario === 'ztest') {
+    const err = validateZtest();
+    if (err) { showError(err); return; }
+    const res = runZtest(alphaRaw);
+    currentResult = res;
+    const diffIncludes0 = res.diffCI[0] <= 0 && res.diffCI[1] >= 0;
+    const dir = res.p2 > res.p1 ? 'higher' : 'lower';
+    renderStatBoxes([
+      { label: 'Control (A)', value: fmtPct(res.p1), sub: `${res.c1}/${res.n1} \u00b7 ${ciPct}% CI: [${fmtPct(res.ci1[0])}, ${fmtPct(res.ci1[1])}]` },
+      { label: 'Treatment (B)', value: fmtPct(res.p2), sub: `${res.c2}/${res.n2} \u00b7 ${ciPct}% CI: [${fmtPct(res.ci2[0])}, ${fmtPct(res.ci2[1])}]` },
+      { label: 'Risk Diff (B\u2212A)', value: fmtPp(res.p2 - res.p1), sub: `${ciPct}% CI: [${fmtPp(res.diffCI[0])}, ${fmtPp(res.diffCI[1])}]` },
+    ]);
+    drawZtestChart(res, alphaRaw);
+    renderInterpretation(
+      `Logistic regression (group as sole predictor). ` +
+      `Control A: ${fmtPct(res.p1)} (${res.c1}/${res.n1}), ${ciPct}% CI [${fmtPct(res.ci1[0])}, ${fmtPct(res.ci1[1])}]. ` +
+      `Treatment B: ${fmtPct(res.p2)} (${res.c2}/${res.n2}), ${ciPct}% CI [${fmtPct(res.ci2[0])}, ${fmtPct(res.ci2[1])}]. ` +
+      `Risk difference: <strong>${fmtPp(res.p2 - res.p1)}</strong> ` +
+      `(${ciPct}% CI: [${fmtPp(res.diffCI[0])}, ${fmtPp(res.diffCI[1])}]). ` +
+      (diffIncludes0
+        ? `This interval <strong>contains zero</strong> \u2014 the data do not provide clear evidence of a difference between the two groups.`
+        : `This interval <strong>does not contain zero</strong>, providing evidence that Treatment B converts ${dir} than Control A.`)
+    );
+
+  } else if (currentScenario === 'ttest') {
+    const err = validateTtest();
+    if (err) { showError(err); return; }
+    const res = runTtest(alphaRaw);
+    currentResult = res;
+    const diff = res.m2 - res.m1;
+    const diffIncludes0 = res.diffCI[0] <= 0 && res.diffCI[1] >= 0;
+    const dir = res.m2 > res.m1 ? 'higher' : 'lower';
+    renderStatBoxes([
+      { label: 'Mean A', value: fmt(res.m1, 3), sub: `n=${res.n1}, SD=${fmt(res.s1,3)}` },
+      { label: 'Mean B', value: fmt(res.m2, 3), sub: `n=${res.n2}, SD=${fmt(res.s2,3)}` },
+      { label: 'Mean Diff (B\u2212A)', value: fmt(diff, 3), sub: `${ciPct}% CI: [${fmt(res.diffCI[0],3)}, ${fmt(res.diffCI[1],3)}]` },
+    ]);
+    drawTtestChart(res, alphaRaw);
+    renderInterpretation(
+      `Mean A = ${fmt(res.m1, 3)} (n=${res.n1}, SD=${fmt(res.s1,3)}). ` +
+      `Mean B = ${fmt(res.m2, 3)} (n=${res.n2}, SD=${fmt(res.s2,3)}). ` +
+      `The mean difference (B\u2212A) is <strong>${fmt(diff, 3)}</strong> ` +
+      `(${ciPct}% CI: [${fmt(res.diffCI[0],3)}, ${fmt(res.diffCI[1],3)}]). ` +
+      (diffIncludes0
+        ? `This interval <strong>contains zero</strong> \u2014 the data do not provide clear evidence of a difference in means.`
+        : `This interval <strong>does not contain zero</strong>, providing evidence that Mean B is ${dir} than Mean A.`)
+    );
+
+  } else if (currentScenario === 'anova') {
+    const err = validateAnova();
+    if (err) { showError(err); return; }
+    const res = runAnova(alphaRaw);
+    currentResult = res;
+    const ciStr = res.variants
+      .map((v, i) => `${v.name}: [${fmt(res.variantCIs[i][0],3)}, ${fmt(res.variantCIs[i][1],3)}]`)
+      .join('; ');
+    renderStatBoxes([
+      { label: 'Grand Mean', value: fmt(res.grandMean, 3) },
+      ...res.variants.map((v, i) => ({
+        label: v.name,
+        value: fmt(v.m, 3),
+        sub: `${ciPct}% CI: [${fmt(res.variantCIs[i][0],3)}, ${fmt(res.variantCIs[i][1],3)}]`
+      })),
+    ]);
+    drawAnovaChart(res);
+    renderInterpretation(
+      `${ciPct}% confidence intervals for group means \u2014 ${ciStr}. ` +
+      `The chart shows each mean with its CI as error bars. ` +
+      `Groups with non-overlapping CIs provide stronger evidence of a difference. ` +
+      `See <em>Effect Size</em> for the F-statistic, p-value, and eta-squared.`
+    );
+
+  } else if (currentScenario === 'chisq') {
+    const err = validateChiSq();
+    if (err) { showError(err); return; }
+    const res = runChiSq(alphaRaw);
+    currentResult = res;
+    const bestIdx = res.rates.indexOf(Math.max(...res.rates));
+    const restC = res.variants.filter((_, i) => i !== bestIdx).reduce((a, v) => a + v.c, 0);
+    const restN = res.variants.filter((_, i) => i !== bestIdx).reduce((a, v) => a + v.n, 0);
+    const pRest = restC / restN;
+    const smallNote = res.smallCells.length
+      ? ` <em>Note: expected counts < 5 for ${res.smallCells.join(', ')} \u2014 chi-squared approximation may be unreliable.</em>`
+      : '';
+    renderStatBoxes([
+      { label: 'Best Variant', value: res.variants[bestIdx].name, sub: fmtPct(res.rates[bestIdx]) },
+      { label: 'Rest Baseline', value: fmtPct(pRest), sub: 'excl. best variant' },
+      { label: 'Variants (k)', value: res.k },
+      { label: 'Total N', value: res.N.toLocaleString() },
+      ...res.variants.map((v, i) => ({
+        label: v.name,
+        value: fmtPct(res.rates[i]),
+        sub: `${ciPct}% CI: [${fmtPct(res.cis[i][0])}, ${fmtPct(res.cis[i][1])}]`
+      })),
+    ]);
+    drawChiSqChart(res);
+    const ciStr = res.variants
+      .map((v, i) => `${v.name}: [${fmtPct(res.cis[i][0])}, ${fmtPct(res.cis[i][1])}]`)
+      .join('; ');
+    renderInterpretation(
+      `${ciPct}% Wilson CIs \u2014 ${ciStr}. ` +
+      `Best performer: <strong>${res.variants[bestIdx].name}</strong> at ${fmtPct(res.rates[bestIdx])} ` +
+      `vs rest baseline ${fmtPct(pRest)} (all other variants combined). ` +
+      `Groups with non-overlapping CIs provide stronger evidence of a difference. ` +
+      `See <em>Effect Size</em> for the chi-squared statistic and Cram\u00e9r's V.${smallNote}`
+    );
+
+  }
+
+  hideStep('step-4');
+  hideStep('step-5');
+  ssState = null;
+  showResults();
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+
+// Allow pressing Enter to run test (only when step-2 is visible)
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && currentScenario) runTest();
+});
+</script>
+</body>
+</html>
