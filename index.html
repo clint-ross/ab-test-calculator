@@ -273,24 +273,7 @@
   .ss-n-value { font-size: 1.4rem; font-weight: 700; color: #1C7599; margin: 6px 0 2px; }
   .ss-footer { font-size: 0.8rem; color: #64748B; margin-top: 6px; }
 
-  /* Effect size button */
-  .btn-effect {
-    background: #1C7599;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 11px 22px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    cursor: pointer;
-    letter-spacing: 0.3px;
-    transition: background 0.15s, transform 0.1s;
-    box-shadow: 0 2px 8px rgba(28,117,153,0.3);
-    margin-top: 16px;
-  }
-  .btn-effect:hover { background: #155f7a; transform: translateY(-1px); }
-  .btn-effect:active { transform: translateY(0); }
-  .btn-ss {
+.btn-ss {
     background: #062430;
     color: white;
     border: none;
@@ -464,26 +447,14 @@
         <canvas id="diff-chart"></canvas>
       </div>
       <div id="interpretation-text"></div>
-      <button class="btn-effect" onclick="showEffectSize()">Show Effect Size ›</button>
+      <button class="btn-ss" id="btn-show-ss" onclick="showSampleSizeStep()" style="display:none">Show Sample Size &amp; Precision ›</button>
     </div>
   </div>
 
-  <!-- Step 5: Effect Size (hidden until button clicked) -->
-  <div id="step-4" style="display:none">
-    <div class="step-header" style="margin-top:8px;">
-      <span class="step-badge">5</span> Effect Size
-    </div>
-    <div class="panel">
-      <div class="stat-boxes" id="effect-boxes"></div>
-      <div id="effect-text"></div>
-      <button class="btn-ss" id="btn-show-ss" onclick="showSampleSizeStep()">Show Sample Size &amp; Precision ›</button>
-    </div>
-  </div>
-
-  <!-- Step 6: Sample Size & Precision (2-group tests only) -->
+  <!-- Step 5: Sample Size & Precision (2-group tests only) -->
   <div id="step-5" style="display:none">
     <div class="step-header" style="margin-top:8px;">
-      <span class="step-badge">6</span> Sample Size &amp; Precision
+      <span class="step-badge">5</span> Sample Size &amp; Precision
     </div>
     <div class="panel">
       <p id="ss-intro" style="font-size:0.85rem; color:#475569; line-height:1.6; margin-bottom:16px;"></p>
@@ -843,7 +814,6 @@ function selectScenario(s) {
   hideStep('step-hist');
   destroyHistChart();
   hideStep('step-3');
-  hideStep('step-4');
   hideStep('step-5');
   clearError();
   currentResult = null;
@@ -1400,15 +1370,6 @@ function renderStatBoxes(boxes) {
   `).join('');
 }
 
-function renderEffectBoxes(boxes) {
-  document.getElementById('effect-boxes').innerHTML = boxes.map(b => `
-    <div class="stat-box">
-      <div class="stat-box-label">${b.label}</div>
-      <div class="stat-box-value">${b.value}</div>
-      ${b.sub ? `<div class="stat-box-sub">${b.sub}</div>` : ''}
-    </div>
-  `).join('');
-}
 
 function renderInterpretation(html) {
   const el = document.getElementById('interpretation-text');
@@ -1416,93 +1377,8 @@ function renderInterpretation(html) {
   el.innerHTML = html;
 }
 
-function renderEffectText(html) {
-  const el = document.getElementById('effect-text');
-  el.className = 'interpretation';
-  el.style.marginTop = '12px';
-  el.innerHTML = html;
-}
-
 function showResults() {
   revealStep('step-3');
-}
-
-function showEffectSize() {
-  if (!currentResult) return;
-  hideStep('step-4');
-  renderEffectSection(currentScenario, currentResult, currentAlpha);
-  revealStep('step-4');
-}
-
-function renderEffectSection(scenario, res, alpha) {
-  const ciPct = Math.round((1 - alpha) * 100);
-  const ssBtn = document.getElementById('btn-show-ss');
-  if (ssBtn) ssBtn.style.display = (scenario === 'ztest' || scenario === 'ttest') ? 'block' : 'none';
-
-  if (scenario === 'ztest') {
-    const orIncludes1 = res.orCI[0] <= 1 && res.orCI[1] >= 1;
-    renderEffectBoxes([
-      { label: 'Odds Ratio', value: fmt(res.or, 3), sub: `${ciPct}% CI: [${fmt(res.orCI[0],3)}, ${fmt(res.orCI[1],3)}]` },
-      { label: 'Relative Lift', value: (res.lift >= 0 ? '+' : '') + res.lift.toFixed(2) + '%' },
-      { label: "Cohen's h", value: fmt(Math.abs(res.cohensH), 3), sub: '|h| < 0.2 small, 0.2–0.5 medium, > 0.8 large' },
-      { label: "Fisher's P-Value", value: fmtPVal(res.pVal) },
-    ]);
-    renderEffectText(
-      `Odds ratio = ${fmt(res.or, 3)} (${ciPct}% CI: [${fmt(res.orCI[0],3)}, ${fmt(res.orCI[1],3)}]). ` +
-      (orIncludes1
-        ? `This interval <strong>includes 1</strong>, consistent with no difference in odds.`
-        : `This interval <strong>excludes 1</strong>, consistent with a real difference in odds.`) +
-      ` Relative lift = ${(res.lift >= 0 ? '+' : '') + res.lift.toFixed(1)}%. ` +
-      `Cohen's h = ${fmt(Math.abs(res.cohensH), 3)} (|h| < 0.2 small, 0.2–0.5 medium, > 0.8 large). ` +
-      `Fisher's exact p-value = ${fmtPVal(res.pVal)}.`
-    );
-
-  } else if (scenario === 'ttest') {
-    renderEffectBoxes([
-      { label: "Cohen's d", value: fmt(Math.abs(res.cohensD), 3), sub: '|d| < 0.2 small, 0.5 medium, > 0.8 large' },
-      { label: 'Relative Lift', value: (res.lift >= 0 ? '+' : '') + res.lift.toFixed(2) + '%' },
-      { label: 'T-Statistic', value: fmt(res.t, 4) },
-      { label: 'df (Welch)', value: res.df.toFixed(2) },
-      { label: 'P-Value', value: fmtPVal(res.pVal) },
-    ]);
-    renderEffectText(
-      `Cohen's d = ${fmt(Math.abs(res.cohensD), 3)} (|d| < 0.2 small, 0.2–0.5 medium, > 0.8 large). ` +
-      `Welch's t(${res.df.toFixed(1)}) = ${fmt(res.t, 4)}, p = ${fmtPVal(res.pVal)}. ` +
-      `Relative lift = ${(res.lift >= 0 ? '+' : '') + res.lift.toFixed(1)}%.`
-    );
-
-  } else if (scenario === 'anova') {
-    renderEffectBoxes([
-      { label: 'Eta-Squared (\u03b7\u00b2)', value: fmt(res.etaSq, 3), sub: 'proportion of variance explained' },
-      { label: 'F-Statistic', value: fmt(res.F, 4), sub: `F(${res.dfB}, ${res.dfW})` },
-      { label: 'P-Value', value: fmtPVal(res.pVal) },
-    ]);
-    renderEffectText(
-      `F(${res.dfB}, ${res.dfW}) = ${fmt(res.F, 3)}, p = ${fmtPVal(res.pVal)}. ` +
-      `Eta-squared \u03b7\u00b2 = ${fmt(res.etaSq, 3)} — the proportion of total variance explained by group membership ` +
-      `(\u03b7\u00b2 \u2248 0.01 small, 0.06 medium, 0.14 large). ` +
-      `<strong>If variants differ:</strong> run a post-hoc test (e.g., Tukey HSD) to identify which specific pairs differ.`
-    );
-
-  } else if (scenario === 'chisq') {
-    const residualStr = res.variants
-      .map((v, i) => `${v.name}: ${res.stdResiduals[i] >= 0 ? '+' : ''}${res.stdResiduals[i].toFixed(2)}`)
-      .join(', ');
-    const smallNote = res.smallCells.length
-      ? ` <em>Note: expected counts < 5 for ${res.smallCells.join(', ')} — chi-squared approximation may be unreliable.</em>`
-      : '';
-    renderEffectBoxes([
-      { label: "Cram\u00e9r's V", value: fmt(res.cramersV, 3), sub: 'V > 0.1 small, > 0.3 medium, > 0.5 large' },
-      { label: '\u03c7\u00b2 Statistic', value: fmt(res.chi2, 4) },
-      { label: 'df', value: res.df },
-      { label: 'P-Value', value: fmtPVal(res.pVal) },
-    ]);
-    renderEffectText(
-      `\u03c7\u00b2(${res.df}) = ${fmt(res.chi2, 3)}, p = ${fmtPVal(res.pVal)}. ` +
-      `Cram\u00e9r's V = ${fmt(res.cramersV, 3)} (V > 0.1 small, > 0.3 medium, > 0.5 large). ` +
-      `Standardized residuals per variant: ${residualStr}.${smallNote}`
-    );
-  }
 }
 
 // ─────────────────────────────────────────────
@@ -1536,7 +1412,6 @@ function plotData() {
 
   destroyHistChart();
   hideStep('step-3');
-  hideStep('step-4');
   hideStep('step-5');
 
   const ctx = document.getElementById('hist-chart').getContext('2d');
@@ -2282,7 +2157,7 @@ function runTest() {
       `${ciPct}% confidence intervals for group means \u2014 ${ciStr}. ` +
       `The chart shows each mean with its CI as error bars. ` +
       `Groups with non-overlapping CIs provide stronger evidence of a difference. ` +
-      `See <em>Effect Size</em> for the F-statistic, p-value, and eta-squared.`
+      `See the interpretation below for the F-statistic, p-value, and eta-squared.`
     );
 
   } else if (currentScenario === 'chisq') {
@@ -2317,14 +2192,15 @@ function runTest() {
       `Best performer: <strong>${res.variants[bestIdx].name}</strong> at ${fmtPct(res.rates[bestIdx])} ` +
       `vs rest baseline ${fmtPct(pRest)} (all other variants combined). ` +
       `Groups with non-overlapping CIs provide stronger evidence of a difference. ` +
-      `See <em>Effect Size</em> for the chi-squared statistic and Cram\u00e9r's V.${smallNote}`
+      `See the interpretation below for the chi-squared statistic and Cram\u00e9r's V.${smallNote}`
     );
 
   }
 
-  hideStep('step-4');
   hideStep('step-5');
   ssState = null;
+  const ssBtn = document.getElementById('btn-show-ss');
+  if (ssBtn) ssBtn.style.display = (currentScenario === 'ztest' || currentScenario === 'ttest') ? 'block' : 'none';
   showResults();
 }
 
